@@ -1,23 +1,18 @@
 """
-An example IRC log bot - logs a channel's events to a file.
+An IRC bot that idles in one channel listening for certain
+interesting "words" and when a msg contains one such word,
+it informs another channel of this msg.
 
-If someone says the bot's name in the channel followed by a ':',
-e.g.
+To run -
 
-  <foo> logbot: hello!
-
-the bot will reply:
-
-  <logbot> foo: I am a log bot
-
-Run this script with two arguments, the channel name the bot should
-connect to, and file to log to, e.g.:
-
-  $ python ircLogBot.py test test.log
-
-will log channel #test to the file 'test.log'.
+  $ python torbot.py
 """
 
+OWNER = "gsathya"
+NICK = "torbot"
+READ_CHANNEL = 'tor-bots'
+WRITE_CHANNEL = 'andromeda'
+WORD_LIST = "words.txt"
 
 # twisted imports
 from twisted.words.protocols import irc
@@ -27,11 +22,16 @@ from twisted.python import log
 # system imports
 import time, sys
 
+def reload_words():
+    with open(WORD_LIST) as fh:
+        words = fh.read().split()
+    return words
+
 class TorBot(irc.IRCClient):
-    """A logging IRC bot."""
+    """An IRC bot."""
     
-    nickname = "satbot"
-    
+    nickname = NICK
+
     def connectionMade(self):
         irc.IRCClient.connectionMade(self)
         print "[connected at %s]" % time.asctime(time.localtime(time.time()))
@@ -40,29 +40,41 @@ class TorBot(irc.IRCClient):
         irc.IRCClient.connectionLost(self, reason)
         print "[disconnected at %s]" % time.asctime(time.localtime(time.time()))
 
-    # callbacks for events
-
     def signedOn(self):
         """Called when bot has succesfully signed on to server."""
-        for channel in self.factory.channels:
-            self.join(channel)
+        self.join(self.factory.read_chan)
+        self.join(self.factory.write_chan)
 
     def privmsg(self, user, channel, msg):
         """This will get called when the bot receives a message."""
         user = user.split('!', 1)[0]
-        print "<%s> %s" % (user, msg)
         
         # Check to see if they're sending me a private message
         if channel == self.nickname:
-            msg = "It isn't nice to whisper!  Play nice with the group."
+            msg = "My creator is %s. He's awesome" % self.factory.owner
             self.msg(user, msg)
             return
-
+        
         # Otherwise check to see if it is a message directed at me
         if msg.startswith(self.nickname + ":"):
-            msg = "%s: I am a log bot" % user
-            self.msg(channel, msg)
-            print "<%s> %s" % (self.nickname, msg)
+            if user == self.factory.owner:
+                msg = msg.split(':')[1]
+                if msg.strip() == "reload":
+                    self.factory.words = reload_words()
+                    print "Reloaded words"
+                elif msg.strip() == "die":
+                    reactor.stop()
+            else:
+                msg = "%s: I am a trac bot. I inform %s about stuff. I'm awesome." % (user, self.factory.owner)
+                self.msg(channel, msg)
+
+        if channel != '#'+self.factory.read_chan:
+            return
+
+        for word in self.factory.words:
+            if word in msg:
+                self.msg('#'+self.factory.write_chan, msg)
+                return
 
 class TorBotFactory(protocol.ClientFactory):
     """
@@ -71,8 +83,11 @@ class TorBotFactory(protocol.ClientFactory):
     A new protocol instance will be created each time we connect to the server.
     """
 
-    def __init__(self, channels):
-        self.channels = channels
+    def __init__(self, read_chan, write_chan):
+        self.read_chan = read_chan
+        self.write_chan = write_chan
+        self.words = reload_words()
+        self.owner = OWNER
 
     def buildProtocol(self, addr):
         p = TorBot()
@@ -91,12 +106,12 @@ class TorBotFactory(protocol.ClientFactory):
 if __name__ == '__main__':
     # initialize logging
     log.startLogging(sys.stdout)
-    
+
     # create factory protocol and application
-    f = TorBotFactory([sys.argv[1], sys.argv[2]])
+    f = TorBotFactory(READ_CHANNEL, WRITE_CHANNEL)
 
     # connect factory to this host and port
-    reactor.connectTCP("irc.freenode.net", 6667, f)
+    reactor.connectTCP("irc.oftc.net", 6667, f)
 
     # run bot
     reactor.run()
