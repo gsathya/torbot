@@ -21,7 +21,7 @@ Setup
 * You need ```twisted``` for this.
 
 ```
-$ apt-get install twisted-core twisted-web
+$ apt-get install python-twisted
 ```
 
 * Modify torbot.py
@@ -41,3 +41,8 @@ $ apt-get install twisted-core twisted-web
 ```
 $ python torbot.py
 ```
+
+Extras
+====
+
+Also, you can reload the words anytime instead of restarting it, by using the "reload" command. You can also kill the bot by asking it to "die".
