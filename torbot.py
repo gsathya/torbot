@@ -73,7 +73,7 @@ class TorBot(irc.IRCClient):
 
         for word in self.factory.words:
             if word in msg:
-                self.msg('#'+self.factory.write_chan, msg)
+                self.msg('#'+self.factory.write_chan, self.factory.owner+':'+msg)
                 return
 
 class TorBotFactory(protocol.ClientFactory):
